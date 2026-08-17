@@ -1,18 +1,60 @@
-// scene.js — Three.js 視覺層。只依賴傳入的 THREE namespace；不碰 window.PG／DOM 邏輯。
+// scene.js — Three.js 視覺層：山谷飛行（規則參數仍來自 rules.js；不碰 window.PG）
 import { RULES } from "./rules.js";
 
 const SEG_LEN = 14;
 const SEG_COUNT = 14; // 覆蓋 196 單位，約等於地平線深度
-const STAR_COUNT = 420;
+const STAR_COUNT = 520;
 const STAR_SPAN = 360;
 
-/** 由 id 產生穩定的偽隨機角度（避免 Math.random 讓同場岩柱形狀跳動） */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function rng() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 由 id 產生穩定的偽隨機角度（避免同場岩柱形狀跳動） */
 function hashAngle(id, salt) {
   let h = (id * 2654435761 + salt * 97) >>> 0;
   h ^= h >>> 13;
   h = Math.imul(h, 0xc2b2ae35) >>> 0;
   h ^= h >>> 16;
   return (h / 4294967296) * Math.PI * 2;
+}
+
+function buildTerrain(THREE, r, kind) {
+  // kind: "mountain"（側山脊，朝走廊中心下降）| "ground"（地面山丘）
+  const rng = mulberry32(kind === "mountain" ? 0x5eed : 0x1a2b);
+  const width = kind === "mountain" ? r.halfW + 4 : r.halfW * 2 + 8;
+  const geo = new THREE.PlaneGeometry(width, SEG_LEN, 22, 3);
+  geo.rotateX(-Math.PI / 2); // 朝上
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i); // 本地 -width/2..width/2
+    const z = pos.getZ(i);
+    if (kind === "mountain") {
+      // 內緣（x=-width/2）低，朝外緣（x=+width/2）上升
+      const u = (x + width / 2) / width; // 0=內 .. 1=外
+      const fall = Math.pow(u, 1.4);
+      const y =
+        (rng() * 5 + 3.5) * fall +
+        (rng() - 0.5) * 2.2 * fall +
+        Math.sin(x * 0.3 + z * 0.4) * 0.7 * fall;
+      pos.setY(i, y);
+    } else {
+      const y =
+        (rng() - 0.5) * 1.4 +
+        Math.sin(x * 0.18 + z * 0.45) * 0.5 +
+        Math.sin(z * 0.9) * 0.3;
+      pos.setY(i, y);
+    }
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 export function createScene(THREE, hostEl) {
@@ -39,48 +81,102 @@ export function createScene(THREE, hostEl) {
   // ── 星空 ────────────────────────────────────────────────
   const starPos = new Float32Array(STAR_COUNT * 3);
   for (let i = 0; i < STAR_COUNT; i++) {
-    starPos[i * 3] = (Math.random() * 2 - 1) * 180;
-    starPos[i * 3 + 1] = (Math.random() * 2 - 1) * 140;
+    starPos[i * 3] = (Math.random() * 2 - 1) * 220;
+    starPos[i * 3 + 1] = Math.random() * 160; // 地平線以上
     starPos[i * 3 + 2] = -STAR_SPAN + Math.random() * STAR_SPAN;
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
   const stars = new THREE.Points(
     starGeo,
-    new THREE.PointsMaterial({ color: 0xbfd0ff, size: 0.9, sizeAttenuation: true, transparent: true, opacity: 0.85 })
+    new THREE.PointsMaterial({ color: 0xbfd0ff, size: 1.0, sizeAttenuation: true, transparent: true, opacity: 0.85 })
   );
   scene.add(stars);
 
-  // ── 走廊（分節循環）─────────────────────────────────────
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x232c4a, roughness: 0.92, metalness: 0.12, flatShading: true });
-  const stripMat = new THREE.MeshStandardMaterial({ color: 0x7d95ff, emissive: 0x2c46b8, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.3 });
+  // ── 地平線霧光（太陽在遠方）────────────────────────────
+  const sunGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(9, 20, 20),
+    new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false, transparent: true, opacity: 0.9 })
+  );
+  sunGlow.position.set(-26, 10, -r.horizonZ + 6);
+  scene.add(sunGlow);
+  const horizonHaze = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, 1, 24, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0x2a3a7a,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+    })
+  );
+  horizonHaze.scale.set(120, 14, 120);
+  horizonHaze.position.set(0, 4, -r.horizonZ + 2);
+  scene.add(horizonHaze);
+
+  // ── 山谷地形（分節循環：側山脊＋地面山丘）───────────────
+  const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x232c4a, roughness: 0.95, metalness: 0.05, flatShading: true });
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x1d2440, roughness: 0.97, metalness: 0.03, flatShading: true });
+  const edgeMat = new THREE.MeshStandardMaterial({ color: 0x7d95ff, emissive: 0x2c46b8, emissiveIntensity: 1.2, roughness: 0.4, metalness: 0.3 });
+  const ridgeGeo = buildTerrain(THREE, r, "mountain");
+  const groundGeo = buildTerrain(THREE, r, "ground");
+
+  // 側山脊：高緣朝外，內緣（走廊側）貼著壁面低下去
+  const ridgeGeoL = ridgeGeo.clone();
+  ridgeGeoL.scale(-1, 1, 1); // 左側鏡射（高緣在外）
+  const ridgeGeoR = ridgeGeo; // 右側原向（高緣在 +x 外緣）
+
   const segs = [];
   for (let i = 0; i < SEG_COUNT; i++) {
     const g = new THREE.Group();
-    const wallL = new THREE.Mesh(new THREE.BoxGeometry(4, 26, SEG_LEN), wallMat);
-    wallL.position.set(-(r.halfW + 2), 0, 0);
-    g.add(wallL);
-    const wallR = wallL.clone();
-    wallR.position.x = r.halfW + 2;
-    g.add(wallR);
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(r.halfW * 2 + 8, 2, SEG_LEN), wallMat);
-    floor.position.y = -(r.halfH + 1);
-    g.add(floor);
-    const ceil = floor.clone();
-    ceil.position.y = r.halfH + 1;
-    g.add(ceil);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, SEG_LEN - 0.4), stripMat);
-    strip.position.set(-(r.halfW - 0.55), r.halfH - 0.55, 0);
-    g.add(strip);
-    const strip2 = strip.clone();
-    strip2.position.x = r.halfW - 0.55;
-    g.add(strip2);
-    const strip3 = strip.clone();
-    strip3.position.set(0, -(r.halfH - 0.55), 0);
-    g.add(strip3);
+
+    const ridgeL = new THREE.Mesh(ridgeGeoL, ridgeMat);
+    ridgeL.position.set(-(r.halfW + 2) - (r.halfW + 4) / 2 + 1.5, -(r.halfH + 1), 0);
+    g.add(ridgeL);
+    const ridgeR = new THREE.Mesh(ridgeGeoR, ridgeMat);
+    ridgeR.position.set(r.halfW + 2 + (r.halfW + 4) / 2 - 1.5, -(r.halfH + 1), 0);
+    g.add(ridgeR);
+
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.position.set(0, -(r.halfH + 1), 0);
+    g.add(ground);
+
+    // 內緣導引燈帶（山脊底緣＋地面邊緣）
+    const stripL = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, SEG_LEN - 0.4), edgeMat);
+    stripL.position.set(-(r.halfW - 0.5), -(r.halfH - 0.6), 0);
+    g.add(stripL);
+    const stripR = stripL.clone();
+    stripR.position.x = r.halfW - 0.5;
+    g.add(stripR);
+    const stripC = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, SEG_LEN - 0.4), edgeMat);
+    stripC.position.set(0, -(r.halfH - 0.55), 0);
+    g.add(stripC);
+
     g.position.z = -r.horizonZ + (i / SEG_COUNT) * SEG_COUNT * SEG_LEN;
     segs.push(g);
     scene.add(g);
+  }
+
+  // ── 高空霧氣帶（視覺化頂部邊界，不影響規則）─────────────
+  const cloudMat = new THREE.MeshStandardMaterial({
+    color: 0x39456e,
+    roughness: 1,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.55,
+    flatShading: true,
+  });
+  const clouds = [];
+  {
+    const crng = mulberry32(0xc10d);
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6 + crng() * 2.2, 0), cloudMat);
+      m.position.set((crng() * 2 - 1) * (r.halfW - 2), r.halfH + 1 + crng() * 2.5, -r.horizonZ + crng() * (SEG_COUNT * SEG_LEN));
+      m.scale.set(1.6 + crng(), 0.8, 1.2 + crng());
+      clouds.push(m);
+      scene.add(m);
+    }
   }
 
   // ── 自機 ────────────────────────────────────────────────
@@ -165,10 +261,15 @@ export function createScene(THREE, hostEl) {
     const speed = active && sim ? sim.speed : 24;
     const move = speed * dt;
 
-    // 走廊循環推進
+    // 地形循環推進
     for (const g of segs) {
       g.position.z += move;
       if (g.position.z > r.removeZ + SEG_LEN / 2) g.position.z -= SEG_COUNT * SEG_LEN;
+    }
+    // 高雲循環（稍慢＝視差）
+    for (const m of clouds) {
+      m.position.z += move * 0.82;
+      if (m.position.z > r.removeZ + 10) m.position.z -= SEG_COUNT * SEG_LEN;
     }
     // 星空慢速流（平移一個完整跨度後無縫循環）
     stars.position.z += move * 0.25;
