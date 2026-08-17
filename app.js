@@ -41,7 +41,6 @@ let sim = null;
 let state = "menu"; // menu | fly | paused | over
 let high = 0;
 let runStartHigh = 0;
-let stick = null;
 let audio = null;
 let toastTimer = 0;
 
@@ -239,7 +238,6 @@ function setupTouch(nipplejs) {
     touch.my = 0;
     refreshInput();
   });
-  stick = manager;
 
   const b = els.boostBtn;
   b.addEventListener("pointerdown", (e) => {
@@ -357,8 +355,9 @@ function finishRun(over) {
   state = "over";
   const score = over.score;
   const isNew = score > runStartHigh && score > 0;
-  if (score > high) {
-    high = score;
+  const nextHigh = mergeHigh(score, high);
+  if (nextHigh !== high) {
+    high = nextHigh;
     void saveHigh(score);
   }
   if (audio) audio.boost(false);
