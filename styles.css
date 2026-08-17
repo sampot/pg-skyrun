@@ -1,0 +1,374 @@
+/* Sky Run — mobile-first（窄屏優先，再放大屏） */
+
+:root {
+  --bg: #0a0f24;
+  --ink: #eaf0ff;
+  --dim: #9fb0d8;
+  --accent: #ff9a3d;
+  --good: #43d17c;
+  --bad: #ff5d5d;
+  --panel: rgba(9, 13, 30, 0.88);
+  --line: rgba(140, 160, 255, 0.28);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "PingFang TC", "Noto Sans TC",
+    "Microsoft JhengHei", sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── HUD ─────────────────────────────────────────── */
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(8px + var(--safe-t)) 12px 8px;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.hud-left,
+.hud-mid,
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.hud-mid {
+  flex: 1;
+  justify-content: center;
+}
+
+.hud-right {
+  justify-content: flex-end;
+}
+
+.fuel {
+  width: 88px;
+  height: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(10, 16, 40, 0.6);
+}
+
+.fuel i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #43d17c, #9be15d);
+  transition: width 120ms linear, background-color 200ms;
+}
+
+.fuel i.low {
+  background: linear-gradient(90deg, #ff5d5d, #ff9a3d);
+}
+
+.hull b {
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.hull b.off {
+  color: rgba(160, 170, 210, 0.25);
+}
+
+.rings {
+  color: #ffd27a;
+}
+
+.speed {
+  color: var(--dim);
+}
+
+.score {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+/* ── 觸控層（粗指標才顯示；左右邊緣中段留給殼把手）── */
+
+.touch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  height: 0;
+  display: none;
+}
+
+.touch.on {
+  display: block;
+}
+
+.stick-zone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 52%;
+  height: 230px;
+  padding-bottom: var(--safe-b);
+  touch-action: none;
+}
+
+.boost-btn {
+  position: absolute;
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  bottom: calc(28px + var(--safe-b));
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: radial-gradient(circle at 35% 28%, #ffc38f, #ff6a2e 72%);
+  color: #2a1002;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(255, 106, 46, 0.45);
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+
+.boost-btn.hold {
+  transform: scale(0.93);
+  filter: brightness(1.18);
+}
+
+/* ── 覆蓋層 ───────────────────────────────────────── */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px calc(16px + env(safe-area-inset-right, 0px))
+    calc(28px + var(--safe-b)) calc(16px + env(safe-area-inset-left, 0px));
+  background: linear-gradient(
+    180deg,
+    rgba(7, 10, 26, 0.5),
+    rgba(7, 10, 26, 0.85)
+  );
+  text-align: center;
+}
+
+.overlay[hidden] {
+  display: none !important;
+}
+
+.overlay.dim {
+  background: rgba(7, 10, 26, 0.72);
+}
+
+.logo {
+  margin: 0;
+  font-size: clamp(42px, 14vw, 68px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  background: linear-gradient(180deg, #ffffff, #93a9ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.overlay h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.tag {
+  margin: 0;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.how {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--dim);
+  font-size: 13.5px;
+  line-height: 1.75;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: rgba(20, 27, 56, 0.9);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.best {
+  margin: 0;
+  color: #ffd27a;
+  font-size: 14px;
+}
+
+.final {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.new {
+  margin: 0;
+  color: var(--good);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.cta {
+  min-width: 210px;
+  min-height: 52px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffd27a, #ff9a3d);
+  color: #241002;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(255, 154, 61, 0.35);
+  touch-action: manipulation;
+}
+
+.cta:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.cta:disabled {
+  opacity: 0.55;
+  cursor: default;
+  box-shadow: none;
+}
+
+.credits {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.credits a {
+  color: var(--dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--line);
+}
+
+/* ── Toast ───────────────────────────────────────── */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(26px + var(--safe-b));
+  transform: translateX(-50%);
+  z-index: 9;
+  max-width: 86vw;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ── 大屏增強（不改手機預設）──────────────────────── */
+
+@media (min-width: 720px) {
+  .hud {
+    font-size: 16px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .fuel {
+    width: 140px;
+    height: 14px;
+  }
+
+  .score {
+    font-size: 18px;
+  }
+
+  .how {
+    font-size: 14.5px;
+  }
+}

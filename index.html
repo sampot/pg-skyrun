@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Sky Run · 3D 環道飛行</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="game" class="game">
+      <div id="stage" class="stage" aria-hidden="true"></div>
+
+      <header class="hud" id="hud" hidden>
+        <div class="hud-left">
+          <div class="fuel" title="燃料">
+            <i id="fuel-bar"></i>
+          </div>
+          <div class="hull" id="hull" title="機體">
+            <b>◆</b><b>◆</b><b>◆</b>
+          </div>
+        </div>
+        <div class="hud-mid">
+          <span class="rings" title="能量環">
+            ◎ <b id="rings">0</b>/<span id="ring-goal">12</span>
+          </span>
+          <span class="speed"><b id="speed">0</b> m/s</span>
+        </div>
+        <div class="hud-right">
+          <span class="score" title="分數"><b id="score">0</b></span>
+          <button
+            type="button"
+            class="icon-btn"
+            id="pause-btn"
+            aria-label="暫停"
+          >
+            ‖
+          </button>
+        </div>
+      </header>
+
+      <div class="touch" id="touch" aria-hidden="true">
+        <div id="stick-zone" class="stick-zone"></div>
+        <button type="button" id="boost-btn" class="boost-btn">
+          BOOST
+        </button>
+      </div>
+
+      <section class="overlay" id="menu">
+        <h1 class="logo">SKY&nbsp;RUN</h1>
+        <p class="tag">3D 環道飛行模擬 · 收集能量環完成任務</p>
+        <ul class="how">
+          <li>
+            鍵盤：<kbd>W A S D</kbd>／<kbd>↑↓←→</kbd> 轉向，
+            <kbd>Space</kbd> 加速
+          </li>
+          <li>觸控：左下搖桿轉向，右下大鈕加速</li>
+          <li>
+            收集 <b>12</b> 個能量環即完成任務；避開岩柱與壁面，
+            燃料耗盡或機體損毀則任務失敗
+          </li>
+        </ul>
+        <p class="best" id="menu-best">最高分 0</p>
+        <p class="tag" id="booting">載入 3D 引擎中…</p>
+        <button type="button" class="cta" id="start-btn" disabled>起飛</button>
+        <p class="credits">
+          <a href="./ATTRIBUTION.md">Credits</a>
+        </p>
+      </section>
+
+      <section class="overlay" id="over" hidden>
+        <h2 class="over-title" id="over-title">任務完成</h2>
+        <p class="final" id="over-score">0</p>
+        <p class="best" id="over-best">最高分 0</p>
+        <p class="new" id="over-new" hidden>新紀錄！</p>
+        <button type="button" class="cta" id="retry-btn">再飛一次</button>
+        <p class="credits">
+          <a href="./ATTRIBUTION.md">Credits</a>
+        </p>
+      </section>
+
+      <section class="overlay dim" id="paused" hidden>
+        <h2>已暫停</h2>
+        <p class="tag">深呼吸，環道還在等你</p>
+        <button type="button" class="cta" id="resume-btn">繼續</button>
+      </section>
+
+      <section class="overlay" id="fatal" hidden>
+        <h2>無法啟動</h2>
+        <p class="tag" id="fatal-msg">請稍後再試</p>
+      </section>
+
+      <p class="toast" id="toast" hidden></p>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
