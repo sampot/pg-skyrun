@@ -1,6 +1,7 @@
 // app.js — 啟動、輸入、遊戲循環、KV 分數、頁內 UI（無 alert/confirm/prompt）
 import { createRun, stepFlight, mergeHigh, parseScore, RULES } from "./rules.js";
 import { createScene } from "./scene.js";
+import { waitForPg } from "./pg.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -35,7 +36,6 @@ const els = {
 
 const clamp01 = (v) => Math.max(-1, Math.min(1, v));
 
-let hasPG = !!window.PG;
 let scene = null;
 let sim = null;
 let state = "menu"; // menu | fly | paused | over
@@ -317,7 +317,7 @@ function updateHud() {
 
 // ── 分數（PG.kv 為權威；無 PG 時僅記憶體）───────────────
 async function loadHigh() {
-  if (!hasPG) return 0;
+  if (!window.PG) return 0;
   try {
     return parseScore(await window.PG.kv.get("highscore"));
   } catch {
@@ -327,7 +327,7 @@ async function loadHigh() {
 }
 
 async function saveHigh(value) {
-  if (!hasPG) return;
+  if (!window.PG) return;
   try {
     await window.PG.kv.put("highscore", String(value));
   } catch {
@@ -409,13 +409,16 @@ function frame(now) {
 async function boot() {
   els.ringGoal.textContent = String(RULES.ringGoal);
 
-  if (!hasPG) {
+  // Do not snapshot !!window.PG at module load — host may still be mounting
+  // sdk.js (especially go memory canvas).
+  const PG = await waitForPg();
+  if (!PG) {
     showFatal("偵測不到 window.PG——請經 Playgrounds 場殼或 go 開啟（直接開檔案無法載入 three）。");
     return;
   }
 
   try {
-    await window.PG.ready;
+    await PG.ready;
   } catch (e) {
     showFatal(`PG.ready 失敗：${e && e.message ? e.message : "unknown"}`);
     return;
@@ -425,8 +428,8 @@ async function boot() {
   let nipplejs;
   try {
     [THREE, nipplejs] = await Promise.all([
-      window.PG.libs.load("three"),
-      window.PG.libs.load("nipple"),
+      PG.libs.load("three"),
+      PG.libs.load("nipple"),
     ]);
   } catch (e) {
     const code = e && e.code ? `（${e.code}）` : "";
